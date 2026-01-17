@@ -38,12 +38,3 @@ pip install -e .
 # Run CLI directly from source
 python -m licenses_deny --help
 ```
-
-## Building binaries with Nuitka
-
-Local example (GitHub Actions workflow automates cross-platform builds):
-
-```bash
-python -m pip install nuitka
-python -m nuitka --onefile --output-dir dist src/licenses_deny/cli.py
-```

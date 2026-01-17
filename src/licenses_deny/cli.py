@@ -29,13 +29,12 @@ allow = [
 
 # If a package metadata license is ambiguous, add a clarification rule
 clarify = [
-  # { package = "example", license = "MIT", version = "=1.2.3", link = "https://example/license" },
+  # { package = "example", license = "MIT", link = "https://example/license" },
 ]
 
 # Exceptions allow additional licenses for a specific package
 exceptions = [
-  # { package = "example-special", allow = ["MPL-2.0"] },
-  # { package = "example-with-git-source", source = "git+https://github.com/example/repo", allow = ["LGPL-2.1"] },
+  # { package = "example-special", allow = ["MPL-2.0"] }
 ]
 
 # Banned dependencies that must not appear in the environment
@@ -47,7 +46,7 @@ packages = [
 # Non-PyPI sources allowlist (substring match)
 [sources]
 allow = [
-  # "git+https://github.com/example/project",
+  # "git:https://github.com/example/project",
   # "file:///opt/vendor/wheels",
 ]
 """
@@ -352,6 +351,10 @@ def load_config(config_path: Path) -> Config:
 
 def extract_license_from_metadata(dist) -> str:
     try:
+        expr = dist.metadata.get("License-Expression", "").strip()
+        if expr:
+            return expr
+    
         license_field = dist.metadata.get("License", "").strip()
         if license_field and license_field not in ("UNKNOWN", "Other/Proprietary"):
             return license_field
@@ -379,20 +382,39 @@ def extract_license_from_metadata(dist) -> str:
 
 def resolve_source(dist) -> SourceInfo:
     try:
-        direct_url_path = Path(dist.locate_file("direct_url.json"))
-        if direct_url_path.is_file():
-            with direct_url_path.open("r", encoding="utf-8") as fp:
-                data = json.load(fp)
-            if "vcs_info" in data:
-                vcs = data["vcs_info"].get("vcs", "vcs")
-                url = data.get("url", "")
-                ref = data["vcs_info"].get("commit_id") or data["vcs_info"].get("requested_revision", "")
-                label = f"git+{vcs}:{url}@{ref}" if ref else f"git+{vcs}:{url}"
-                return SourceInfo(label=label, kind="vcs")
-            url_field = data.get("url")
-            if url_field:
-                kind = "dir" if url_field.startswith("file://") else "url"
-                return SourceInfo(label=url_field, kind=kind)
+        direct_url_path: Path | None = None
+        files = getattr(dist, "files", None) or []
+        for entry in files:
+            if entry.name == "direct_url.json":
+                candidate = Path(dist.locate_file(entry))
+                if candidate.is_file():
+                    direct_url_path = candidate
+                    break
+        if direct_url_path is None:
+            candidate = Path(dist.locate_file("direct_url.json"))
+            if candidate.is_file():
+                direct_url_path = candidate
+        if direct_url_path is None:
+            return SourceInfo(label="pypi", kind="pypi")
+
+        with direct_url_path.open("r", encoding="utf-8") as fp:
+            data = json.load(fp)
+
+        url_field = data.get("url", "") or ""
+        if "vcs_info" in data:
+            vcs = data["vcs_info"].get("vcs", "vcs")
+            ref = data["vcs_info"].get("commit_id") or data["vcs_info"].get("requested_revision", "")
+            label = f"{vcs}:{url_field}@{ref}" if ref else f"{vcs}:{url_field}"
+            return SourceInfo(label=label, kind="vcs")
+
+        lowered = url_field.lower()
+        if url_field.startswith("file://"):
+            return SourceInfo(label=url_field, kind="dir")
+        if lowered.startswith("git+") or lowered.startswith("ssh://") or lowered.startswith("git@"):
+            return SourceInfo(label=url_field, kind="vcs")
+        if url_field:
+            return SourceInfo(label=url_field, kind="url")
+
         return SourceInfo(label="pypi", kind="pypi")
     except Exception:
         return SourceInfo(label="unknown", kind="unknown")
