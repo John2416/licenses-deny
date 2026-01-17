@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "licenses-deny"
+version = "0.1.0"
+description = "Check Python dependency licenses and sources against allow/deny policies."
+readme = "README.md"
+requires-python = ">=3.11"
+keywords = ["license", "compliance", "dependencies"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Operating System :: OS Independent",
+]
+
+[project.scripts]
+licenses-deny = "licenses_deny.cli:main"
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]

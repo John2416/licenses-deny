@@ -1,0 +1,53 @@
+name: Build Binaries
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  nuitka:
+    name: Nuitka ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            python-version: "3.11"
+          - os: macos-latest
+            python-version: "3.11"
+          - os: ubuntu-latest
+            python-version: "3.11"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y patchelf
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install . nuitka
+
+      - name: Build onefile binary with Nuitka
+        run: |
+          python -m nuitka --onefile --assume-yes-for-downloads --output-dir=dist --output-filename=licenses-deny src/licenses_deny/cli.py
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: licenses-deny-${{ runner.os }}
+          path: dist/**
+          if-no-files-found: error
