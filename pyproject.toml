@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "licenses-deny"
-version = "0.1.0"
+version = "0.1.1"
 description = "A Python package that audits package licenses and provenance against user-defined allow/deny policies."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -20,6 +20,7 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
   "Operating System :: OS Independent",
 ]
+dependencies = []
 
 [project.scripts]
 licenses-deny = "licenses_deny.cli:main"
