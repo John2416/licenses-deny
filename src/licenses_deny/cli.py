@@ -100,6 +100,12 @@ LICENSE_MAPPING = {
     "gnu affero general public license v3.0": "AGPL-3.0",
     "gnu affero general public license version 3": "AGPL-3.0",
 }
+
+MULTI_WORD_LICENSES = sorted(
+    [k for k in LICENSE_MAPPING.keys() if " " in k],
+    key=lambda x: -len(x)
+)
+
 @dataclass
 class ClarifyRule:
     package: str
@@ -231,20 +237,60 @@ def split_license_expression(expr: str, strict: bool) -> list[str]:
 
 
 def tokenize_license_expression(expr: str, strict: bool) -> list[str]:
+    if not expr or expr == "Unknown":
+        return []
+
+    # Step 1: Normalize case and replace separators with operators
     operator_token = "AND" if strict else "OR"
-    replaced = re.sub(r"[\\/;,\\+]", f" {operator_token} ", expr)
+    cleaned = re.sub(r"[\\/;,\\+]", f" {operator_token} ", expr)
+    cleaned = re.sub(r"\s+", " ", cleaned.strip())
+
+    # Step 2: Tokenize while preserving multi-word license names
     tokens: list[str] = []
-    pattern = re.compile(r"\(|\)|\bAND\b|\bOR\b|[^()\s]+", flags=re.IGNORECASE)
-    for match in pattern.finditer(replaced):
-        token = match.group(0)
-        upper = token.upper()
-        if upper in ("AND", "OR"):
-            tokens.append("AND" if (strict and upper == "OR") else upper)
-        elif token in ("(", ")"):
-            tokens.append(token)
+    i = 0
+    n = len(cleaned)
+
+    # Precompile regex for AND/OR (case-insensitive word boundaries)
+    and_or_pattern = re.compile(r"\b(and|or)\b", re.IGNORECASE)
+
+    while i < n:
+        char = cleaned[i]
+        if char in " \t\n\r":
+            i += 1
+            continue
+        if char in "()":
+            tokens.append(char)
+            i += 1
+            continue
+
+        # Try to match a multi-word license starting at position i
+        matched = False
+        substr = cleaned[i:].lower()
+        for phrase in MULTI_WORD_LICENSES:
+            if substr.startswith(phrase):
+                # Found a multi-word license
+                tokens.append(cleaned[i:i + len(phrase)])
+                i += len(phrase)
+                matched = True
+                break
+
+        if matched:
+            continue
+
+        # Otherwise, read until next space or operator
+        j = i
+        while j < n and cleaned[j] not in " \t\n\r()":
+            j += 1
+        word = cleaned[i:j]
+        i = j
+
+        # Check if this word is an operator
+        if and_or_pattern.fullmatch(word):
+            tokens.append("AND" if strict else "OR")
         else:
-            tokens.append(token.strip())
-    return [t for t in tokens if t]
+            tokens.append(word)
+
+    return tokens
 
 
 def to_postfix(tokens: list[str]) -> list[str]:
