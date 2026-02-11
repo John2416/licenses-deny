@@ -1,6 +1,6 @@
 import sys
 
-from .models import BanRule, Config, PackageRecord, SourcePolicy
+from .models import BanRule, Config, PackageRecord, SourceInfo, SourcePolicy
 from .packages import render_package_line, resolve_allowed_set
 from .utils import is_license_compliant, summarize_license
 
@@ -56,7 +56,7 @@ def check_bans(packages: list[PackageRecord], ban_rules: list[BanRule], quiet: b
     return True
 
 
-def is_source_allowed(source, allowlist: list[str]) -> bool:
+def is_source_allowed(source: SourceInfo, allowlist: list[str]) -> bool:
     if source.kind == 'pypi':
         return True
     if not allowlist:

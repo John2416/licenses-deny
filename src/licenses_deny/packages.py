@@ -1,8 +1,9 @@
 from collections.abc import Iterable
+from importlib.metadata import Distribution, PackageMetadata
 import json
-from typing import Any
 from pathlib import Path
 import sys
+from typing import Any, cast
 
 from .models import ClarifyRule, Config, PackageRecord, SourceInfo
 from .utils import summarize_license
@@ -15,16 +16,17 @@ def in_virtual_environment() -> bool:
     )
 
 
-def extract_license_from_metadata(dist) -> str:
+def extract_license_from_metadata(dist: Distribution) -> str:
     try:
-        expr = dist.metadata.get('License-Expression', '').strip()
+        metadata: PackageMetadata = dist.metadata
+        expr = (metadata.get('License-Expression') or '').strip()
         if expr:
             return expr
 
-        license_field = dist.metadata.get('License', '').strip()
+        license_field = (metadata.get('License') or '').strip()
         if license_field and license_field not in ('UNKNOWN', 'Other/Proprietary'):
             return license_field
-        for classifier in dist.metadata.get_all('Classifier', []):
+        for classifier in metadata.get_all('Classifier', []):
             if classifier.startswith('License ::'):
                 lowered = classifier.lower()
                 if 'python software foundation license' in lowered:
@@ -46,25 +48,25 @@ def extract_license_from_metadata(dist) -> str:
         return 'Unknown'
 
 
-def resolve_source(dist) -> SourceInfo:
+def resolve_source(dist: Distribution) -> SourceInfo:
     try:
         direct_url_path: Path | None = None
         files = getattr(dist, 'files', None) or []
         for entry in files:
             if entry.name == 'direct_url.json':
-                candidate = Path(dist.locate_file(entry))
+                candidate = Path(str(dist.locate_file(entry)))
                 if candidate.is_file():
                     direct_url_path = candidate
                     break
         if direct_url_path is None:
-            candidate = Path(dist.locate_file('direct_url.json'))
+            candidate = Path(str(dist.locate_file('direct_url.json')))
             if candidate.is_file():
                 direct_url_path = candidate
         if direct_url_path is None:
             return SourceInfo(label='pypi', kind='pypi')
 
         with direct_url_path.open('r', encoding='utf-8') as fp:
-            data = json.load(fp)
+            data = cast(dict[str, Any], json.load(fp))
 
         url_field = data.get('url', '') or ''
         if 'vcs_info' in data:
