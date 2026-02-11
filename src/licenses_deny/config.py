@@ -5,7 +5,17 @@ import tomllib
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 
 from .constants import CONFIG_FILENAME, ROOT_MARKERS, TEMPLATE_CONFIG
-from .models import BanRule, ClarifyRule, Config, LicenseException, LicensePolicy, SourcePolicy
+from .models import (
+    BanPolicy,
+    BanRule,
+    ClarifyRule,
+    Config,
+    Decision,
+    LicenseException,
+    LicensePolicy,
+    PrivatePolicy,
+    SourcePolicy,
+)
 
 
 def find_project_root(start: Path | None = None) -> Path:
@@ -50,44 +60,75 @@ def load_config(config_path: Path) -> Config:
 
     licenses_cfg = raw_config.get('licenses', {}) or {}
     allow = set(licenses_cfg.get('allow', []))
+    deny = set(licenses_cfg.get('deny', []))
+
     exceptions: list[LicenseException] = []
     for exc in licenses_cfg.get('exceptions', []):
         pkg = exc.get('package', '')
         allow_list = exc.get('allow', [])
-        source_label = exc.get('source')
+        reason = exc.get('reason')
         if pkg and allow_list:
             exceptions.append(
-                LicenseException(package=pkg.lower(), allow=set(allow_list), source=source_label)
+                LicenseException(package=pkg.lower(), allow=set(allow_list), reason=reason)
             )
 
     clarify_rules: list[ClarifyRule] = []
     for entry in licenses_cfg.get('clarify', []):
         pkg = entry.get('package', '')
-        license_expr = entry.get('license', '')
+        expression = entry.get('expression', '')
         version_spec = entry.get('version', '')
-        if not pkg or not license_expr:
+        link = entry.get('link')
+        if not pkg or not expression:
             continue
         parsed_spec = parse_version_spec(version_spec) if version_spec else None
         rule = ClarifyRule(
             package=pkg.lower(),
-            license=license_expr,
+            expression=expression,
             version_spec=parsed_spec,
+            link=link,
         )
         clarify_rules.append(rule)
 
+    private_cfg = licenses_cfg.get('private', {}) or {}
+    private_policy = PrivatePolicy(
+        ignore=bool(private_cfg.get('ignore', False)),
+        registries=list(private_cfg.get('registries', []) or []),
+    )
+
+    license_policy = LicensePolicy(
+        allow=allow,
+        deny=deny,
+        unlicensed=Decision.from_str(licenses_cfg.get('unlicensed'), Decision.DENY),
+        copyleft=Decision.from_str(licenses_cfg.get('copyleft'), Decision.DENY),
+        exceptions=exceptions,
+        clarify_rules=clarify_rules,
+        private=private_policy,
+    )
+
     bans_cfg = raw_config.get('bans', {}) or {}
-    ban_rules: list[BanRule] = []
-    for entry in bans_cfg.get('packages', []):
+    deny_bans: list[BanRule] = []
+    for entry in bans_cfg.get('deny', []):
         name = entry.get('name', '')
         reason = entry.get('reason')
         if name:
-            ban_rules.append(BanRule(name=name.lower(), reason=reason))
+            deny_bans.append(BanRule(name=name.lower(), reason=reason))
+
+    skip_bans: list[BanRule] = []
+    for entry in bans_cfg.get('skip', []):
+        name = entry.get('name', '')
+        reason = entry.get('reason')
+        if name:
+            skip_bans.append(BanRule(name=name.lower(), reason=reason))
+
+    bans_policy = BanPolicy(deny=deny_bans, skip=skip_bans)
 
     sources_cfg = raw_config.get('sources', {}) or {}
-    allowlist = sources_cfg.get('allow', []) or []
-
-    return Config(
-        licenses=LicensePolicy(allow=allow, exceptions=exceptions, clarify_rules=clarify_rules),
-        bans=ban_rules,
-        sources=SourcePolicy(allowlist=allowlist),
+    source_policy = SourcePolicy(
+        unknown_registry=Decision.from_str(sources_cfg.get('unknown-registry'), Decision.DENY),
+        unknown_git=Decision.from_str(sources_cfg.get('unknown-git'), Decision.DENY),
+        allow_registry=list(sources_cfg.get('allow-registry', []) or []),
+        allow_git=list(sources_cfg.get('allow-git', []) or []),
+        allow_org={k: list(v) for k, v in (sources_cfg.get('allow-org', {}) or {}).items()},
     )
+
+    return Config(licenses=license_policy, bans=bans_policy, sources=source_policy)
