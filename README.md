@@ -10,7 +10,7 @@ Simple CLI to inspect Python environment dependencies for license compliance, ba
 ## Installation
 
 ```bash
-pip install .
+pip install licenses-deny
 ```
 
 ## Usage
