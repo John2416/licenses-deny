@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Iterable
 
 import tomllib
+from packaging.specifiers import InvalidSpecifier, SpecifierSet
+from packaging.version import InvalidVersion
 
 CONFIG_FILENAME = "licenses-deny.toml"
 ROOT_MARKERS = [
@@ -29,7 +31,7 @@ allow = [
 
 # If a package metadata license is ambiguous, add a clarification rule
 clarify = [
-  # { package = "example", license = "MIT", link = "https://example/license" },
+  # { package = "example", license = "MIT", version = ">=1.2", link = "https://example/license" },
 ]
 
 # Exceptions allow additional licenses for a specific package
@@ -110,17 +112,17 @@ MULTI_WORD_LICENSES = sorted(
 class ClarifyRule:
     package: str
     license: str
-    version_op: str | None
-    version_val: str | None
+    version_spec: SpecifierSet | None
 
     def matches(self, package: str, version: str) -> bool:
         if self.package != package:
             return False
-        if self.version_op is None:
+        if self.version_spec is None:
             return True
-        if self.version_op == "=":
-            return self.version_val == version
-        return False
+        try:
+            return version in self.version_spec
+        except InvalidVersion:
+            return False
 
 @dataclass
 class LicenseException:
@@ -340,13 +342,21 @@ def evaluate_license_postfix(postfix: list[str], allowed_set: set[str], strict: 
         return all(stack) if strict else any(stack)
     return bool(stack[0])
 
-def parse_version_spec(spec_str: str) -> tuple[str, str] | None:
+def parse_version_spec(spec_str: str) -> SpecifierSet | None:
     spec = spec_str.strip()
-    if spec.startswith("="):
-        value = spec[1:].strip()
-        if value:
-            return "=", value
-    return None
+    if not spec:
+        return None
+
+    normalized = spec
+    if normalized.startswith("=") and not normalized.startswith("=="):
+        normalized = "==" + normalized.lstrip("=")
+    elif not re.match(r"^[<>=!~]", normalized):
+        normalized = f"=={normalized}"
+
+    try:
+        return SpecifierSet(normalized)
+    except InvalidSpecifier:
+        return None
 
 def load_config(config_path: Path) -> Config:
     with config_path.open("rb") as fp:
@@ -373,8 +383,7 @@ def load_config(config_path: Path) -> Config:
         rule = ClarifyRule(
             package=pkg.lower(),
             license=license_expr,
-            version_op=parsed_spec[0] if parsed_spec else None,
-            version_val=parsed_spec[1] if parsed_spec else None,
+            version_spec=parsed_spec,
         )
         clarify_rules.append(rule)
 
