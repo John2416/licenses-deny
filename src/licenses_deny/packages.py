@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 from typing import Any, cast
 
-from .models import ClarifyRule, Config, PackageRecord, SourceInfo
+from .models import ClarifyRule, Config, PackageRecord, SourceInfo, SourceKind
 from .utils import summarize_license
 
 
@@ -63,7 +63,7 @@ def resolve_source(dist: Distribution) -> SourceInfo:
             if candidate.is_file():
                 direct_url_path = candidate
         if direct_url_path is None:
-            return SourceInfo(label='pypi', kind='pypi')
+            return SourceInfo(label='pypi', kind=SourceKind.PYPI)
 
         with direct_url_path.open('r', encoding='utf-8') as fp:
             data = cast(dict[str, Any], json.load(fp))
@@ -73,19 +73,19 @@ def resolve_source(dist: Distribution) -> SourceInfo:
             vcs = data['vcs_info'].get('vcs', 'vcs')
             ref = data['vcs_info'].get('commit_id') or data['vcs_info'].get('requested_revision', '')
             label = f'{vcs}:{url_field}@{ref}' if ref else f'{vcs}:{url_field}'
-            return SourceInfo(label=label, kind='vcs')
+            return SourceInfo(label=label, kind=SourceKind.GIT)
 
         lowered = url_field.lower()
         if url_field.startswith('file://'):
-            return SourceInfo(label=url_field, kind='dir')
+            return SourceInfo(label=url_field, kind=SourceKind.DIR)
         if lowered.startswith(('git+', 'ssh://', 'git@')):
-            return SourceInfo(label=url_field, kind='vcs')
+            return SourceInfo(label=url_field, kind=SourceKind.GIT)
         if url_field:
-            return SourceInfo(label=url_field, kind='url')
+            return SourceInfo(label=url_field, kind=SourceKind.REGISTRY)
 
-        return SourceInfo(label='pypi', kind='pypi')
+        return SourceInfo(label='pypi', kind=SourceKind.PYPI)
     except Exception:
-        return SourceInfo(label='unknown', kind='unknown')
+        return SourceInfo(label='unknown', kind=SourceKind.UNKNOWN)
 
 
 def apply_clarify_rules(
@@ -96,7 +96,7 @@ def apply_clarify_rules(
 ) -> tuple[str, bool]:
     for rule in clarify_rules:
         if rule.matches(package, version):
-            return rule.license, True
+            return rule.expression, True
     return raw_license, False
 
 
@@ -104,8 +104,6 @@ def resolve_allowed_set(pkg: PackageRecord, config: Config) -> set[str]:
     allowed = set(config.licenses.allow)
     for exc in config.licenses.exceptions:
         if exc.package != pkg.name:
-            continue
-        if exc.source and exc.source.lower() not in pkg.source.label.lower():
             continue
         allowed |= exc.allow
     return allowed

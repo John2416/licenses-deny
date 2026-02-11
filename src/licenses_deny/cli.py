@@ -30,12 +30,12 @@ def handle_check(scope: str, config_path: Path, strict: bool, quiet: bool) -> No
     config = load_config(config_path)
     packages = collect_packages(config)
     success = True
-    if scope in ('all', 'licenses'):
-        success &= check_licenses(packages, config, strict, quiet)
-    if scope in ('all', 'bans'):
-        success &= check_bans(packages, config.bans, quiet)
     if scope in ('all', 'sources'):
         success &= check_sources(packages, config.sources, quiet)
+    if scope in ('all', 'bans'):
+        success &= check_bans(packages, config.bans, quiet)
+    if scope in ('all', 'licenses'):
+        success &= check_licenses(packages, config, strict, quiet)
     if not success:
         sys.exit(1)
 
