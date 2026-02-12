@@ -3,7 +3,6 @@ from urllib.parse import urlsplit
 
 from .models import (
     BanPolicy,
-    BanRule,
     Config,
     Decision,
     PackageRecord,
@@ -13,7 +12,6 @@ from .models import (
 )
 from .packages import render_package_line, resolve_allowed_set
 from .utils import (
-    is_copyleft,
     is_license_compliant,
     normalize_license,
     normalized_license_parts,
@@ -74,16 +72,6 @@ def check_licenses(packages: list[PackageRecord], config: Config, strict: bool, 
                 f'{pkg.name}=={pkg.version} uses unapproved license: {summarize_license(pkg.effective_license)}'
             )
             continue
-
-        if any(is_copyleft(part) for part in normalized_parts):
-            allowed, warn = _decision_allows(config.licenses.copyleft)
-            if warn:
-                warnings.append(f'{pkg.name}=={pkg.version} is copyleft-licensed (policy=warn)')
-            if not allowed:
-                violations.append(
-                    f'{pkg.name}=={pkg.version} is copyleft-licensed: {summarize_license(pkg.effective_license)}'
-                )
-                continue
 
         if not quiet:
             status = 'clarified' if pkg.clarified else 'metadata'
@@ -177,7 +165,12 @@ def is_source_allowed(source: SourceInfo, source_policy: SourcePolicy) -> tuple[
             return True, False
         return _decision_allows(source_policy.unknown_git)
 
-    if source.kind in {SourceKind.REGISTRY, SourceKind.URL, SourceKind.DIR, SourceKind.UNKNOWN}:
+    if source.kind in {
+        SourceKind.REGISTRY,
+        SourceKind.URL,
+        SourceKind.DIR,
+        SourceKind.UNKNOWN,
+    }:
         if any(allowed.lower() in label_lower for allowed in source_policy.allow_registry):
             return True, False
         return _decision_allows(source_policy.unknown_registry)

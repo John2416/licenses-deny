@@ -66,7 +66,6 @@ class LicensePolicy:
     allow: set[str] = field(default_factory=set)
     deny: set[str] = field(default_factory=set)
     unlicensed: Decision = Decision.DENY
-    copyleft: Decision = Decision.DENY
     exceptions: list[LicenseException] = field(default_factory=list)
     clarify_rules: list[ClarifyRule] = field(default_factory=list)
     private: PrivatePolicy = field(default_factory=PrivatePolicy)
