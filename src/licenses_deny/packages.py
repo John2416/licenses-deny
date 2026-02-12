@@ -112,7 +112,8 @@ def resolve_allowed_set(pkg: PackageRecord, config: Config) -> set[str]:
 def collect_packages(config: Config) -> list[PackageRecord]:
     if not in_virtual_environment():
         print(
-            'Error: This script must be run inside an activated virtual environment.', file=sys.stderr
+            'Error: This script must be run inside an activated virtual environment.',
+            file=sys.stderr,
         )
         sys.exit(1)
     try:
