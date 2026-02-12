@@ -176,8 +176,3 @@ def normalized_license_parts(expr: str) -> set[str]:
     tokens = tokenize_license_expression(expr, strict=False)
     parts = {normalize_license(tok) for tok in tokens if tok not in {'AND', 'OR', '(', ')'}}
     return {p for p in parts if p}
-
-
-def is_copyleft(license_name: str) -> bool:
-    normalized = license_name.lower()
-    return 'gpl' in normalized or 'agpl' in normalized or 'lgpl' in normalized

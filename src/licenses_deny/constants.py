@@ -29,7 +29,6 @@ deny = [
   "AGPL-3.0",
 ]
 unlicensed = "deny"
-copyleft = "deny"
 
 exceptions = []
 

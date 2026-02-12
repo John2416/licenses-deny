@@ -16,7 +16,6 @@ deny = [
   "AGPL-3.0",
 ]
 unlicensed = "deny"  # allow | warn | deny
-copyleft = "deny"
 
 # Exceptions allow additional licenses for a specific package
 exceptions = [

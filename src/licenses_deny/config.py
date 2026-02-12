@@ -4,7 +4,7 @@ import tomllib
 
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 
-from .constants import CONFIG_FILENAME, ROOT_MARKERS, TEMPLATE_CONFIG
+from .constants import CONFIG_FILENAME, ROOT_MARKERS
 from .models import (
     BanPolicy,
     BanRule,
@@ -99,7 +99,6 @@ def load_config(config_path: Path) -> Config:
         allow=allow,
         deny=deny,
         unlicensed=Decision.from_str(licenses_cfg.get('unlicensed'), Decision.DENY),
-        copyleft=Decision.from_str(licenses_cfg.get('copyleft'), Decision.DENY),
         exceptions=exceptions,
         clarify_rules=clarify_rules,
         private=private_policy,
