@@ -10,7 +10,7 @@ from .models import (
     SourceKind,
     SourcePolicy,
 )
-from .packages import render_package_line, resolve_allowed_set
+from .packages import format_license_display, render_package_line, resolve_allowed_set
 from .utils import (
     is_license_compliant,
     normalize_license,
@@ -24,7 +24,13 @@ def _decision_allows(decision: Decision) -> tuple[bool, bool]:
     return (decision != Decision.DENY, decision == Decision.WARN)
 
 
-def check_licenses(packages: list[PackageRecord], config: Config, strict: bool, quiet: bool) -> bool:
+def check_licenses(
+    packages: list[PackageRecord],
+    config: Config,
+    strict: bool,
+    quiet: bool,
+    show_raw_license: bool = False,
+) -> bool:
     violations: list[str] = []
     warnings: list[str] = []
 
@@ -61,23 +67,22 @@ def check_licenses(packages: list[PackageRecord], config: Config, strict: bool, 
         }
 
         if any(part in config.licenses.deny for part in normalized_parts):
-            violations.append(
-                f'{pkg.name}=={pkg.version} uses denied license: {summarize_license(pkg.effective_license)}'
-            )
+            license_display = format_license_display(pkg, show_raw_license=show_raw_license)
+            violations.append(f'{pkg.name}=={pkg.version} uses denied license: {license_display}')
             continue
 
         compliant = is_license_compliant(pkg.effective_license, allowed_set, strict)
         if not compliant:
+            license_display = format_license_display(pkg, show_raw_license=show_raw_license)
             violations.append(
-                f'{pkg.name}=={pkg.version} uses unapproved license: {summarize_license(pkg.effective_license)}'
+                f'{pkg.name}=={pkg.version} uses unapproved license: {license_display}'
             )
             continue
 
         if not quiet:
             status = 'clarified' if pkg.clarified else 'metadata'
-            print(
-                f'[ok:{status}] {pkg.name}=={pkg.version} ({summarize_license(pkg.effective_license)})'
-            )
+            license_display = format_license_display(pkg, show_raw_license=show_raw_license)
+            print(f'[ok:{status}] {pkg.name}=={pkg.version} ({license_display})')
 
     for msg in warnings:
         print(f'Warning: {msg}', file=sys.stderr)
@@ -204,6 +209,6 @@ def check_sources(packages: list[PackageRecord], source_policy: SourcePolicy, qu
     return True
 
 
-def list_packages(packages: list[PackageRecord]) -> None:
+def list_packages(packages: list[PackageRecord], show_raw_license: bool = False) -> None:
     for pkg in packages:
-        print(render_package_line(pkg))
+        print(render_package_line(pkg, show_raw_license=show_raw_license))

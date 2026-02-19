@@ -2,11 +2,12 @@ from collections.abc import Iterable
 from importlib.metadata import Distribution, PackageMetadata
 import json
 from pathlib import Path
+import re
 import sys
 from typing import Any, cast
 
 from .models import ClarifyRule, Config, PackageRecord, SourceInfo, SourceKind
-from .utils import summarize_license
+from .utils import normalize_license, summarize_license, tokenize_license_expression
 
 
 def in_virtual_environment() -> bool:
@@ -148,10 +149,43 @@ def collect_packages(config: Config) -> list[PackageRecord]:
     return records
 
 
-def render_package_line(pkg: PackageRecord) -> str:
-    license_part = summarize_license(pkg.effective_license)
-    if pkg.clarified and pkg.effective_license != pkg.raw_license:
-        license_part = (
-            f'{summarize_license(pkg.effective_license)} (raw: {summarize_license(pkg.raw_license)})'
-        )
+def _normalize_license_for_display(value: str) -> str:
+    if not value:
+        return value
+    tokens = tokenize_license_expression(value, strict=False)
+    if not tokens:
+        return value.strip()
+
+    has_expression = any(tok in ('AND', 'OR') for tok in tokens) or any(
+        tok in ('(', ')') for tok in tokens
+    )
+    if not has_expression:
+        return normalize_license(value)
+
+    normalized_tokens: list[str] = []
+    for tok in tokens:
+        if tok in ('AND', 'OR', '(', ')'):
+            normalized_tokens.append(tok)
+        else:
+            normalized_tokens.append(normalize_license(tok))
+
+    # Keep expression readable: normalize spacing and parentheses.
+    text = ' '.join(normalized_tokens)
+    text = re.sub(r'\s*\(\s*', '(', text)
+    text = re.sub(r'\s*\)\s*', ')', text)
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
+
+
+def format_license_display(pkg: PackageRecord, show_raw_license: bool = False) -> str:
+    primary = summarize_license(_normalize_license_for_display(pkg.effective_license))
+    if show_raw_license:
+        raw = summarize_license(pkg.raw_license)
+        if raw and raw != primary:
+            return f'{primary} (raw: {raw})'
+    return primary
+
+
+def render_package_line(pkg: PackageRecord, show_raw_license: bool = False) -> str:
+    license_part = format_license_display(pkg, show_raw_license=show_raw_license)
     return f'{pkg.name}=={pkg.version} [{license_part}] source={pkg.source.label}'
