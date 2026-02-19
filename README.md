@@ -22,6 +22,9 @@ licenses-deny init
 # List installed packages with detected license/source
 licenses-deny list
 
+# List and include raw license strings when they differ from the normalized value
+licenses-deny list --show-raw-license
+
 # Run checks (licenses + bans + sources)
 licenses-deny check
 
