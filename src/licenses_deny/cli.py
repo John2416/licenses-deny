@@ -29,13 +29,19 @@ def handle_init(force: bool) -> None:
     print(f'Template config written to {target_path}')
 
 
-def handle_list(config_path: Path) -> None:
+def handle_list(config_path: Path, show_raw_license: bool) -> None:
     config = load_config(config_path)
     packages = collect_packages(config)
-    list_packages(packages)
+    list_packages(packages, show_raw_license=show_raw_license)
 
 
-def handle_check(scope: str, config_path: Path, strict: bool, quiet: bool) -> None:
+def handle_check(
+    scope: str,
+    config_path: Path,
+    strict: bool,
+    quiet: bool,
+    show_raw_license: bool,
+) -> None:
     config = load_config(config_path)
     packages = collect_packages(config)
     success = True
@@ -44,7 +50,9 @@ def handle_check(scope: str, config_path: Path, strict: bool, quiet: bool) -> No
     if scope in ('all', 'bans'):
         success &= check_bans(packages, config.bans, quiet)
     if scope in ('all', 'licenses'):
-        success &= check_licenses(packages, config, strict, quiet)
+        success &= check_licenses(
+            packages, config, strict=strict, quiet=quiet, show_raw_license=show_raw_license
+        )
     if not success:
         sys.exit(1)
 
@@ -64,7 +72,12 @@ def build_parser() -> argparse.ArgumentParser:
         help='Overwrite existing config file if present.',
     )
 
-    subparsers.add_parser('list', help='List dependencies with licenses and sources.')
+    list_parser = subparsers.add_parser('list', help='List dependencies with licenses and sources.')
+    list_parser.add_argument(
+        '--show-raw-license',
+        action='store_true',
+        help='Also display the original license string when it differs from the normalized value.',
+    )
 
     check_parser = subparsers.add_parser(
         'check',
@@ -87,6 +100,11 @@ def build_parser() -> argparse.ArgumentParser:
         action='store_true',
         help='Suppress success logs on stdout.',
     )
+    check_parser.add_argument(
+        '--show-raw-license',
+        action='store_true',
+        help='Also display the original license string when it differs from the normalized value.',
+    )
 
     return parser
 
@@ -106,7 +124,7 @@ def main() -> None:
         sys.exit(1)
 
     if args.command == 'list':
-        handle_list(config_path)
+        handle_list(config_path, show_raw_license=args.show_raw_license)
         return
 
     if args.command == 'check':
@@ -115,6 +133,7 @@ def main() -> None:
             config_path=config_path,
             strict=args.strict,
             quiet=args.quiet,
+            show_raw_license=args.show_raw_license,
         )
         return
 
