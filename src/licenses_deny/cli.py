@@ -29,10 +29,10 @@ def handle_init(force: bool) -> None:
     print(f'Template config written to {target_path}')
 
 
-def handle_list(config_path: Path, show_raw_license: bool) -> None:
+def handle_list(config_path: Path, show_raw_license: bool, detail: bool) -> None:
     config = load_config(config_path)
     packages = collect_packages(config)
-    list_packages(packages, show_raw_license=show_raw_license)
+    list_packages(packages, show_raw_license=show_raw_license, detail=detail)
 
 
 def handle_check(
@@ -77,6 +77,11 @@ def build_parser() -> argparse.ArgumentParser:
         '--show-raw-license',
         action='store_true',
         help='Also display the original license string when it differs from the normalized value.',
+    )
+    list_parser.add_argument(
+        '--detail',
+        action='store_true',
+        help='Show license resolution details (metadata, normalized, clarify, etc.).',
     )
 
     check_parser = subparsers.add_parser(
@@ -124,7 +129,11 @@ def main() -> None:
         sys.exit(1)
 
     if args.command == 'list':
-        handle_list(config_path, show_raw_license=args.show_raw_license)
+        handle_list(
+            config_path,
+            show_raw_license=args.show_raw_license,
+            detail=args.detail,
+        )
         return
 
     if args.command == 'check':

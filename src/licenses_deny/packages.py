@@ -6,8 +6,21 @@ import re
 import sys
 from typing import Any, cast
 
-from .models import ClarifyRule, Config, PackageRecord, SourceInfo, SourceKind
-from .utils import normalize_license, summarize_license, tokenize_license_expression
+from .models import (
+    ClarifyRule,
+    Config,
+    LicenseResolution,
+    PackageRecord,
+    SourceInfo,
+    SourceKind,
+)
+from .utils import (
+    is_license_expression_valid,
+    normalize_license,
+    normalize_license_expression,
+    summarize_license,
+    tokenize_license_expression,
+)
 
 
 def in_virtual_environment() -> bool:
@@ -17,36 +30,45 @@ def in_virtual_environment() -> bool:
     )
 
 
-def extract_license_from_metadata(dist: Distribution) -> str:
+def extract_license_from_metadata(dist: Distribution) -> tuple[str, LicenseResolution]:
     try:
         metadata: PackageMetadata = dist.metadata
         expr = (metadata.get('License-Expression') or '').strip()
         if expr:
-            return expr
+            if is_license_expression_valid(expr):
+                return expr, LicenseResolution.METADATA_EXPRESSION
+            normalized = normalize_license(expr)
+            if normalized != expr:
+                return normalized, LicenseResolution.NORMALIZED_EXPRESSION
 
         license_field = (metadata.get('License') or '').strip()
         if license_field and license_field not in ('UNKNOWN', 'Other/Proprietary'):
-            return license_field
+            if is_license_expression_valid(license_field):
+                return license_field, LicenseResolution.METADATA_LICENSE
+            normalized = normalize_license(license_field)
+            if normalized != license_field:
+                return normalized, LicenseResolution.NORMALIZED_LICENSE
+            return license_field, LicenseResolution.METADATA_LICENSE
         for classifier in metadata.get_all('Classifier', []):
             if classifier.startswith('License ::'):
                 lowered = classifier.lower()
                 if 'python software foundation license' in lowered:
-                    return 'PSF-2.0'
+                    return 'PSF-2.0', LicenseResolution.CLASSIFIER
                 if 'mit' in lowered:
-                    return 'MIT'
+                    return 'MIT', LicenseResolution.CLASSIFIER
                 if 'apache' in lowered and '2.0' in lowered:
-                    return 'Apache-2.0'
+                    return 'Apache-2.0', LicenseResolution.CLASSIFIER
                 if 'bsd' in lowered:
                     if '3-clause' in lowered or 'three clause' in lowered:
-                        return 'BSD-3-Clause'
-                    return 'BSD'
+                        return 'BSD-3-Clause', LicenseResolution.CLASSIFIER
+                    return 'BSD', LicenseResolution.CLASSIFIER
                 if 'public domain' in lowered:
-                    return 'Public Domain'
+                    return 'Public Domain', LicenseResolution.CLASSIFIER
                 if 'mozilla public license 2.0' in lowered:
-                    return 'MPL-2.0'
-        return 'Unknown'
+                    return 'MPL-2.0', LicenseResolution.CLASSIFIER
+        return 'Unknown', LicenseResolution.UNKNOWN
     except Exception:
-        return 'Unknown'
+        return 'Unknown', LicenseResolution.UNKNOWN
 
 
 def resolve_source(dist: Distribution) -> SourceInfo:
@@ -130,10 +152,12 @@ def collect_packages(config: Config) -> list[PackageRecord]:
             continue
         package = name.lower()
         version = dist.version
-        raw_license = extract_license_from_metadata(dist)
+        raw_license, resolution = extract_license_from_metadata(dist)
         effective_license, clarified = apply_clarify_rules(
             package, version, raw_license, config.licenses.clarify_rules
         )
+        if clarified:
+            resolution = LicenseResolution.CLARIFY
         source = resolve_source(dist)
         records.append(
             PackageRecord(
@@ -142,6 +166,7 @@ def collect_packages(config: Config) -> list[PackageRecord]:
                 raw_license=raw_license,
                 effective_license=effective_license,
                 clarified=clarified,
+                resolution=resolution,
                 source=source,
             )
         )
@@ -152,15 +177,21 @@ def collect_packages(config: Config) -> list[PackageRecord]:
 def _normalize_license_for_display(value: str) -> str:
     if not value:
         return value
-    tokens = tokenize_license_expression(value, strict=False)
+    normalized_expr = normalize_license_expression(value)
+    display_value = normalized_expr or value
+    if normalized_expr is None:
+        normalized_whole = normalize_license(value)
+        if normalized_whole != value:
+            return normalized_whole
+    tokens = tokenize_license_expression(display_value, strict=False)
     if not tokens:
-        return value.strip()
+        return display_value.strip()
 
     has_expression = any(tok in ('AND', 'OR') for tok in tokens) or any(
         tok in ('(', ')') for tok in tokens
     )
     if not has_expression:
-        return normalize_license(value)
+        return normalize_license(display_value)
 
     normalized_tokens: list[str] = []
     for tok in tokens:
@@ -186,6 +217,13 @@ def format_license_display(pkg: PackageRecord, show_raw_license: bool = False) -
     return primary
 
 
-def render_package_line(pkg: PackageRecord, show_raw_license: bool = False) -> str:
+def render_package_line(
+    pkg: PackageRecord,
+    show_raw_license: bool = False,
+    detail: bool = False,
+) -> str:
     license_part = format_license_display(pkg, show_raw_license=show_raw_license)
-    return f'{pkg.name}=={pkg.version} [{license_part}] source={pkg.source.label}'
+    line = f'{pkg.name}=={pkg.version} [{license_part}] source={pkg.source.label}'
+    if detail:
+        line = f'{line} resolution={pkg.resolution.value}'
+    return line
