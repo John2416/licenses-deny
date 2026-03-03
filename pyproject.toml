@@ -21,6 +21,7 @@ classifiers = [
   "Operating System :: OS Independent",
 ]
 dependencies = [
+    "license-expression>=30.4.4",
     "packaging>=23.2",
 ]
 
