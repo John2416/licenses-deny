@@ -209,6 +209,10 @@ def check_sources(packages: list[PackageRecord], source_policy: SourcePolicy, qu
     return True
 
 
-def list_packages(packages: list[PackageRecord], show_raw_license: bool = False) -> None:
+def list_packages(
+    packages: list[PackageRecord],
+    show_raw_license: bool = False,
+    detail: bool = False,
+) -> None:
     for pkg in packages:
-        print(render_package_line(pkg, show_raw_license=show_raw_license))
+        print(render_package_line(pkg, show_raw_license=show_raw_license, detail=detail))

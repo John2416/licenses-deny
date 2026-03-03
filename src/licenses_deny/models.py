@@ -30,6 +30,16 @@ class SourceKind(StrEnum):
     UNKNOWN = 'unknown'
 
 
+class LicenseResolution(StrEnum):
+    METADATA_EXPRESSION = 'metadata_expression'
+    NORMALIZED_EXPRESSION = 'normalized_expression'
+    METADATA_LICENSE = 'metadata_license'
+    NORMALIZED_LICENSE = 'normalized_license'
+    CLASSIFIER = 'classifier'
+    CLARIFY = 'clarify'
+    UNKNOWN = 'unknown'
+
+
 @dataclass
 class ClarifyRule:
     package: str
@@ -112,4 +122,5 @@ class PackageRecord:
     raw_license: str
     effective_license: str
     clarified: bool
+    resolution: LicenseResolution
     source: SourceInfo
